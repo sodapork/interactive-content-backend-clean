@@ -82,7 +82,16 @@ app.post('/ideas', async (req, res) => {
       messages: [
         {
           role: "system",
-          content: `You are an expert at creating interactive web tools for blog content. Given a blog post, suggest 5 highly relevant and engaging interactive tool ideas (such as calculators, quizzes, checklists, or comparison charts) that would add value for readers. Respond with a numbered list of 5 short, clear tool ideas. Do not include explanations or markdown.`
+          content: `You are an expert at creating interactive web tools for blog content. Given a blog post, suggest 5 highly relevant and engaging interactive tool ideas that would add value for readers. Each idea must:
+1. Be directly relevant to the blog post's main topic and key points
+2. Provide clear, measurable value to readers
+3. Be technically feasible to implement
+4. Be engaging and interactive
+5. Have a clear purpose and user flow
+6. Be unique and innovative
+7. Be suitable for embedding in a blog post
+
+Respond with a numbered list of 5 short, clear tool ideas. Do not include explanations or markdown.`
         },
         {
           role: "user",
@@ -101,7 +110,60 @@ app.post('/ideas', async (req, res) => {
   }
 });
 
-// Generate a tool for a selected idea
+// Add validation function
+function validateGeneratedTool(tool) {
+  const issues = [];
+  
+  // Check for basic structure
+  if (!tool.includes('<html') || !tool.includes('</html>')) {
+    issues.push('Missing HTML structure');
+  }
+  
+  // Check for accessibility
+  if (!tool.includes('aria-')) {
+    issues.push('Missing ARIA attributes for accessibility');
+  }
+  
+  // Check for responsive design
+  if (!tool.includes('@media') && !tool.includes('width: 100%')) {
+    issues.push('Missing responsive design elements');
+  }
+  
+  // Check for error handling
+  if (!tool.includes('try') && !tool.includes('catch')) {
+    issues.push('Missing error handling');
+  }
+  
+  // Check for input validation
+  if (tool.includes('<input') && !tool.includes('required') && !tool.includes('validate')) {
+    issues.push('Missing input validation');
+  }
+  
+  // Check for loading states
+  if (tool.includes('fetch') && !tool.includes('loading')) {
+    issues.push('Missing loading states for async operations');
+  }
+  
+  // Check for color contrast
+  const lowContrastColors = [
+    'color: #f0f0f0',
+    'color: #e0e0e0',
+    'color: #d0d0d0',
+    'background: #f0f0f0',
+    'background: #e0e0e0',
+    'background: #d0d0d0'
+  ];
+  if (lowContrastColors.some(color => tool.includes(color))) {
+    issues.push('Potential low contrast color combinations detected');
+  }
+  
+  return {
+    isValid: issues.length === 0,
+    issues
+  };
+}
+
+// Update the generate endpoint to include validation
 app.post('/generate', async (req, res) => {
   const { content, idea, userRequirements } = req.body;
   try {
@@ -110,7 +172,49 @@ app.post('/generate', async (req, res) => {
       messages: [
         {
           role: "system",
-          content: `You are an expert at creating highly engaging, modern, and interactive web tools for blog content. Given a blog post and user requirements, generate a sophisticated, ultra-engaging tool that is directly relevant to the post's topic and provides real value to readers.\n\nRequirements:\n- The tool should be deeply contextual to the provided content, using terminology, examples, and scenarios directly from the blog post.\n- Create a highly engaging experience with thoughtful interactivity, dynamic feedback, and multiple steps or features that encourage exploration.\n- Design a modern, visually appealing interface with proper spacing, typography, and visual hierarchy that matches the tone and style of the source content.\n- Use creative elements like animations, progress bars, charts, branching logic, or gamification that enhance the user experience and reinforce the content's message.\n- Ensure the tool is responsive and works well in the preview window, with appropriate sizing and layout.\n- Guarantee the tool is fully functional with no JavaScript errors, proper error handling, and smooth user interactions.\n- Maintain high accessibility standards with sufficient color contrast (WCAG AA compliant), clear text readability, and proper focus states.\n- Output a complete, embeddable widget with HTML, CSS, and JS. Do not output only JavaScript or code blocks. Do not include markdown, triple backticks, or explanations—just the raw HTML, CSS, and JS.`
+          content: `You are an expert at creating highly engaging, modern, and interactive web tools for blog content. Given a blog post and user requirements, generate a sophisticated, ultra-engaging tool that is directly relevant to the post's topic and provides real value to readers.
+
+Quality Requirements:
+1. Content Relevance:
+   - Use terminology, examples, and scenarios directly from the blog post
+   - Ensure all content is accurate and aligned with the source material
+   - Maintain consistent tone and style with the original content
+
+2. User Experience:
+   - Create a clear, intuitive user flow
+   - Provide immediate feedback for user actions
+   - Include helpful error messages and validation
+   - Ensure smooth transitions and animations
+   - Implement proper loading states
+
+3. Technical Quality:
+   - Write clean, well-structured code
+   - Implement proper error handling
+   - Ensure cross-browser compatibility
+   - Optimize performance (minimize DOM operations, use efficient algorithms)
+   - Follow best practices for HTML, CSS, and JavaScript
+
+4. Visual Design:
+   - Use a modern, professional design
+   - Implement proper spacing and typography
+   - Ensure visual hierarchy guides user attention
+   - Use appropriate color contrast (WCAG AA compliant)
+   - Make the tool responsive and mobile-friendly
+
+5. Accessibility:
+   - Include proper ARIA labels
+   - Ensure keyboard navigation works
+   - Maintain sufficient color contrast
+   - Provide text alternatives for visual elements
+   - Support screen readers
+
+6. Security:
+   - Sanitize all user inputs
+   - Prevent XSS vulnerabilities
+   - Handle sensitive data appropriately
+   - Implement proper validation
+
+Output a complete, embeddable widget with HTML, CSS, and JS. Do not include markdown, triple backticks, or explanations—just the raw HTML, CSS, and JS.`
         },
         {
           role: "user",
@@ -118,7 +222,84 @@ app.post('/generate', async (req, res) => {
         }
       ],
     });
-    res.json({ tool: completion.choices[0].message.content || '' });
+    
+    const generatedTool = completion.choices[0].message.content || '';
+    const validation = validateGeneratedTool(generatedTool);
+    
+    if (!validation.isValid) {
+      // If validation fails, try to regenerate with specific feedback
+      const retryCompletion = await openai.chat.completions.create({
+        model: "gpt-4.1",
+        messages: [
+          {
+            role: "system",
+            content: `You are an expert at creating highly engaging, modern, and interactive web tools for blog content. Given a blog post and user requirements, generate a sophisticated, ultra-engaging tool that is directly relevant to the post's topic and provides real value to readers.
+
+Quality Requirements:
+1. Content Relevance:
+   - Use terminology, examples, and scenarios directly from the blog post
+   - Ensure all content is accurate and aligned with the source material
+   - Maintain consistent tone and style with the original content
+
+2. User Experience:
+   - Create a clear, intuitive user flow
+   - Provide immediate feedback for user actions
+   - Include helpful error messages and validation
+   - Ensure smooth transitions and animations
+   - Implement proper loading states
+
+3. Technical Quality:
+   - Write clean, well-structured code
+   - Implement proper error handling
+   - Ensure cross-browser compatibility
+   - Optimize performance (minimize DOM operations, use efficient algorithms)
+   - Follow best practices for HTML, CSS, and JavaScript
+
+4. Visual Design:
+   - Use a modern, professional design
+   - Implement proper spacing and typography
+   - Ensure visual hierarchy guides user attention
+   - Use appropriate color contrast (WCAG AA compliant)
+   - Make the tool responsive and mobile-friendly
+
+5. Accessibility:
+   - Include proper ARIA labels
+   - Ensure keyboard navigation works
+   - Maintain sufficient color contrast
+   - Provide text alternatives for visual elements
+   - Support screen readers
+
+6. Security:
+   - Sanitize all user inputs
+   - Prevent XSS vulnerabilities
+   - Handle sensitive data appropriately
+   - Implement proper validation
+
+Output a complete, embeddable widget with HTML, CSS, and JS. Do not include markdown, triple backticks, or explanations—just the raw HTML, CSS, and JS.
+
+Please address these quality issues in the generated tool:\n${validation.issues.join('\n')}`
+          },
+          {
+            role: "user",
+            content: `Blog content: ${content}\n\nUser requirements: ${userRequirements || idea || ''}`
+          }
+        ],
+      });
+      
+      const retryTool = retryCompletion.choices[0].message.content || '';
+      const retryValidation = validateGeneratedTool(retryTool);
+      
+      if (retryValidation.isValid) {
+        res.json({ tool: retryTool });
+      } else {
+        res.json({ 
+          tool: retryTool,
+          warnings: retryValidation.issues
+        });
+      }
+    } else {
+      res.json({ tool: generatedTool });
+    }
   } catch (err) {
     res.status(500).json({ error: 'Failed to generate tool', details: err.message });
   }
@@ -203,7 +384,7 @@ app.post('/publish', verifyToken, async (req, res) => {
       console.error('Error storing metadata:', err);
     }
 
-    res.json({ url: metadata.url });
+    res.json({ url: metadata.url, tool: html });
   } catch (err) {
     console.error('Error in /publish:', err.response ? err.response.data : err.message, err.stack);
     res.status(500).json({ error: 'Failed to publish tool', details: err.message });
@@ -242,6 +423,43 @@ app.get('/recent', verifyToken, async (req, res) => {
   } catch (err) {
     console.error('Error in /recent:', err.response ? err.response.data : err.message, err.stack);
     res.status(500).json({ error: 'Failed to fetch recent tools', details: err.message });
+  }
+});
+
+// Add after /recent endpoint
+app.get('/my-tools', verifyToken, async (req, res) => {
+  const repo = 'sodapork/interactive-tools';
+  const branch = 'gh-pages';
+  const githubToken = process.env.GITHUB_TOKEN;
+  const userId = req.member.id;
+
+  try {
+    const response = await axios.get(
+      `https://api.github.com/repos/${repo}/contents/metadata/${userId}?ref=${branch}`,
+      githubToken
+        ? { headers: { Authorization: `token ${githubToken}` } }
+        : undefined
+    );
+
+    const tools = await Promise.all(
+      response.data.map(async (file) => {
+        const metadataResponse = await axios.get(
+          file.download_url,
+          githubToken
+            ? { headers: { Authorization: `token ${githubToken}` } }
+            : undefined
+        );
+        return metadataResponse.data;
+      })
+    );
+
+    res.json({ tools: tools.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)) });
+  } catch (err) {
+    if (err.response && err.response.status === 404) {
+      return res.json({ tools: [] });
+    }
+    console.error('Error in /my-tools:', err.response ? err.response.data : err.message, err.stack);
+    res.status(500).json({ error: 'Failed to fetch user tools', details: err.message });
   }
 });
 
