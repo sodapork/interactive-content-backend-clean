@@ -11,13 +11,7 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
 const app = express();
-app.use(cors({
-  origin: [
-    'https://interactive-content-frontend.vercel.app',
-    'http://localhost:3000'
-  ],
-  credentials: true
-}));
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
 // Middleware to verify Memberstack token
