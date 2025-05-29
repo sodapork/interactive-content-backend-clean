@@ -335,21 +335,32 @@ app.post('/publish', verifyToken, async (req, res) => {
   const githubToken = process.env.GITHUB_TOKEN;
   const userId = req.member.id;
 
+  console.log('Publishing tool:', {
+    filename,
+    path,
+    userId,
+    tokenLength: githubToken ? githubToken.length : 0
+  });
+
   // Get the current file SHA if it exists (for updates)
   let sha = undefined;
   try {
+    console.log('Checking if file exists:', `https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}`);
     const getResp = await axios.get(
       `https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}`,
       { headers: { Authorization: `token ${githubToken}` } }
     );
     sha = getResp.data.sha;
+    console.log('File exists, got SHA:', sha);
   } catch (e) {
+    console.log('File does not exist yet, will create new:', e.message);
     // File does not exist, that's fine
   }
 
   // Create or update the file
   try {
-    await axios.put(
+    console.log('Attempting to create/update file...');
+    const response = await axios.put(
       `https://api.github.com/repos/${repo}/contents/${path}`,
       {
         message: `Publish tool: ${path}`,
@@ -359,6 +370,7 @@ app.post('/publish', verifyToken, async (req, res) => {
       },
       { headers: { Authorization: `token ${githubToken}` } }
     );
+    console.log('File created/updated successfully:', response.data);
 
     // Store tool metadata in a separate file
     const metadataPath = `metadata/${userId}/${path}.json`;
@@ -371,7 +383,8 @@ app.post('/publish', verifyToken, async (req, res) => {
     };
 
     try {
-      await axios.put(
+      console.log('Storing metadata...');
+      const metadataResponse = await axios.put(
         `https://api.github.com/repos/${repo}/contents/${metadataPath}`,
         {
           message: `Update tool metadata: ${path}`,
@@ -380,14 +393,24 @@ app.post('/publish', verifyToken, async (req, res) => {
         },
         { headers: { Authorization: `token ${githubToken}` } }
       );
+      console.log('Metadata stored successfully:', metadataResponse.data);
     } catch (err) {
-      console.error('Error storing metadata:', err);
+      console.error('Error storing metadata:', err.response ? err.response.data : err.message);
     }
 
     res.json({ url: metadata.url, tool: html });
   } catch (err) {
-    console.error('Error in /publish:', err.response ? err.response.data : err.message, err.stack);
-    res.status(500).json({ error: 'Failed to publish tool', details: err.message });
+    console.error('Error in /publish:', {
+      message: err.message,
+      response: err.response ? err.response.data : null,
+      status: err.response ? err.response.status : null,
+      headers: err.response ? err.response.headers : null
+    });
+    res.status(500).json({ 
+      error: 'Failed to publish tool', 
+      details: err.message,
+      response: err.response ? err.response.data : null
+    });
   }
 });
 
