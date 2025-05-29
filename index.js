@@ -301,18 +301,47 @@ Please address these quality issues in the generated tool:\n${validation.issues.
 
 // Update a tool with user feedback
 app.post('/update', async (req, res) => {
-  const { content, currentTool, feedback } = req.body;
+  const { content, currentTool, feedback, conversationHistory = [] } = req.body;
   try {
+    const messages = [
+      {
+        role: "system",
+        content: `You are an expert at updating interactive tools for blog content. You maintain a conversation history with the user to understand their requirements better. Here is the original blog post: ${content}. Here is the current tool code: ${currentTool}. The user wants the following changes: ${feedback}. Please update the tool accordingly, taking into account the conversation history to provide a more contextual and helpful response. Return only the updated, complete HTML+JS code, no explanations or markdown. Output a complete, embeddable widget with HTML, CSS, and JS. Do not output only JavaScript or code blocks.`
+      }
+    ];
+
+    // Add conversation history to the messages
+    conversationHistory.forEach(msg => {
+      messages.push({
+        role: msg.role,
+        content: msg.content
+      });
+    });
+
+    // Add the current feedback
+    messages.push({
+      role: "user",
+      content: feedback
+    });
+
     const completion = await openai.chat.completions.create({
       model: "gpt-4.1",
-      messages: [
-        {
-          role: "system",
-          content: `You are an expert at updating interactive tools for blog content. Here is the original blog post: ${content}. Here is the current tool code: ${currentTool}. The user wants the following changes: ${feedback}. Please update the tool accordingly. Return only the updated, complete HTML+JS code, no explanations or markdown. Output a complete, embeddable widget with HTML, CSS, and JS. Do not output only JavaScript or code blocks.`
-        }
-      ],
+      messages: messages,
     });
-    res.json({ tool: completion.choices[0].message.content || '' });
+
+    const updatedTool = completion.choices[0].message.content || '';
+    
+    // Add the assistant's response to the conversation history
+    const updatedHistory = [
+      ...conversationHistory,
+      { role: "user", content: feedback },
+      { role: "assistant", content: "I've updated the tool based on your feedback." }
+    ];
+
+    res.json({ 
+      tool: updatedTool,
+      conversationHistory: updatedHistory
+    });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update tool', details: err.message });
   }
